@@ -1,7 +1,7 @@
 terraform {
   backend "s3" {
-    bucket       = "karpenterlab-tfstate"
-    key          = "lab-php/terraform.tfstate"
+    bucket       = "sharedlabs-tfstate"
+    key          = "lab-docker-java-cicd/terraform.tfstate"
     region       = "eu-central-1"
     use_lockfile = true
   }
