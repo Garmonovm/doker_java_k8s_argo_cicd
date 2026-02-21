@@ -21,7 +21,7 @@ docker-php-app/
 | GET    | `/`       | Root — confirms app is running       | 200 JSON |
 | GET    | `/health` | Health check for ALB / ECS / EKS     | 200 JSON |
 
-### Health Response Example
+#### Health Response Example
 
 ```json
 {
