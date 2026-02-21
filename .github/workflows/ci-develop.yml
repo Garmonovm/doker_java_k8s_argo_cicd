@@ -1,20 +1,13 @@
-# ============================================================================
-# CI Pipeline — Build, Scan, Push to ECR, Deploy to Development
-# Triggers: push to develop branch (when app code changes)
-#
-# Flow:
-#   1. Detect which services changed (php-app, java-app)
-#   2. Lint Dockerfiles with hadolint
-#   3. Build Docker images → tag with sha-<commit>
-#   4. Scan images with Trivy for vulnerabilities
-#   5. Push to ECR
-#   6. Update Helm values with new image tag
-#   7. ArgoCD auto-syncs development namespace
-# ============================================================================
-
 name: CI — Build & Deploy to Development
 
 on:
+  pull_request:
+    branches: [develop]
+    paths-ignore:
+      - "**.md"
+      - "terraform/**"
+      - "argocd/**"
+      - ".github/**"
   push:
     branches: [develop]
     paths-ignore:
@@ -24,8 +17,8 @@ on:
       - ".github/**"
 
 permissions:
-  id-token: write    # Required for OIDC authentication to AWS
-  contents: write    # Required to push values file updates
+  id-token: write
+  contents: write
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -70,7 +63,7 @@ jobs:
           fi
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Step 2: Lint Dockerfiles
+  # Step 2: Lint Dockerfiles (on PR and push)
   # ──────────────────────────────────────────────────────────────────────────
   lint:
     name: "Lint: ${{ matrix.service.app }}"
@@ -91,12 +84,12 @@ jobs:
           failure-threshold: warning
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Step 3: Build, Scan, Push to ECR
+  # Step 3: Build, Scan, Push to ECR (only on push)
   # ──────────────────────────────────────────────────────────────────────────
   build:
     name: "Build: ${{ matrix.service.app }}"
     needs: [changes, lint]
-    if: needs.changes.outputs.any_changed == 'true'
+    if: github.event_name == 'push' && needs.changes.outputs.any_changed == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -108,7 +101,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.ECR_AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -142,12 +135,12 @@ jobs:
           docker push "${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:${{ steps.tag.outputs.IMAGE_TAG }}"
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Step 4: Update Helm values → ArgoCD auto-syncs to development
+  # Step 4: Update Helm values → ArgoCD auto-syncs to development (only on push)
   # ──────────────────────────────────────────────────────────────────────────
   update-manifests:
     name: Update Development Manifests
     needs: [changes, build]
-    if: needs.changes.outputs.any_changed == 'true'
+    if: github.event_name == 'push' && needs.changes.outputs.any_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

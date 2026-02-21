@@ -42,12 +42,12 @@ output "cluster_arn" {
 # GitHub Actions OIDC
 # ---------------------------------------------------------------------------
 
-output "github_actions_role_arn" {
-  description = "IAM role ARN for GitHub Actions. Set as GitHub repo variable AWS_ROLE_ARN."
-  value       = aws_iam_role.github_actions.arn
-}
+# output "github_actions_role_arn" {
+#   description = "IAM role ARN for GitHub Actions. Set as GitHub repo variable AWS_ROLE_ARN."
+#   value       = aws_iam_role.github_actions.arn
+# }
 
-output "ecr_registry" {
-  description = "Full ECR registry URL (ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com)"
-  value       = local.ecr_registry
-}
+# output "ecr_registry" {
+#   description = "Full ECR registry URL (ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com)"
+#   value       = local.ecr_registry
+# }
