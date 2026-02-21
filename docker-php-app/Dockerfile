@@ -31,7 +31,7 @@ COPY . .
 FROM php:8.3-apache AS runtime
 
 # Metadata
-LABEL maintainer="maksim" \
+LABEL maintainer="owner_me" \
       description="Production PHP application" \
       version="1.0.0"
 
@@ -72,7 +72,7 @@ ENV APP_VERSION=1.0.0
 # ServerName localhost — suppresses AH00558 warning in logs.
 # Does NOT affect routing in EKS/K8s (Service + Ingress/ALB handle that).
 # Only used by Apache for self-referential URLs; keeps logs clean.
-RUN sed -i 's/Listen 80/Listen ${PORT}/' /etc/apache2/ports.conf \
+RUN sed -i "s/Listen 80/Listen ${PORT}/" /etc/apache2/ports.conf \
     && echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
 COPY <<'EOF' /etc/apache2/sites-available/000-default.conf
