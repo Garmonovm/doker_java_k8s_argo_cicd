@@ -4,17 +4,13 @@ on:
   pull_request:
     branches: [develop]
     paths-ignore:
-      - "**.md"
       - "terraform/**"
       - "argocd/**"
-      - ".github/**"
   push:
     branches: [develop]
     paths-ignore:
-      - "**.md"
       - "terraform/**"
       - "argocd/**"
-      - ".github/**"
 
 permissions:
   id-token: write
