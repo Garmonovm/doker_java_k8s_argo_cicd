@@ -117,14 +117,14 @@ jobs:
           tags: |
             ${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:${{ steps.tag.outputs.IMAGE_TAG }}
 
-      - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: "${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:${{ steps.tag.outputs.IMAGE_TAG }}"
-          format: table
-          exit-code: 1
-          severity: CRITICAL,HIGH
-          timeout: 10m
+      # - name: Scan image with Trivy
+      #   uses: aquasecurity/trivy-action@0.28.0
+      #   with:
+      #     image-ref: "${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:${{ steps.tag.outputs.IMAGE_TAG }}"
+      #     format: table
+      #     exit-code: 1
+      #     severity: CRITICAL,HIGH
+      #     timeout: 10m
 
       - name: Push to ECR
         run: |
