@@ -28,7 +28,7 @@ permissions:
   contents: write    # Required to push values file updates
 
 env:
-  AWS_REGION: ${{ vars.AWS_REGION }}
+  AWS_REGION: ${{ secrets.AWS_REGION }}
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
@@ -168,6 +168,11 @@ jobs:
             echo "  → ${VALUES_FILE}"
             sed -i "s|tag:.*|tag: \"${IMAGE_TAG}\"|" "${VALUES_FILE}"
           done
+
+      - name: Prepare Helm values for Java app
+        run: |
+          sed "s/ACCOUNT_ID/${{ secrets.AWS_ACCOUNT_ID }}/g; s/REGION/${{ secrets.AWS_REGION }}/g" \
+            helm/values/java-app/development.yaml.tpl > helm/values/java-app/development.yaml
 
       - name: Commit and push
         run: |

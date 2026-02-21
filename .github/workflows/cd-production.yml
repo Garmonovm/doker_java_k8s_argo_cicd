@@ -25,7 +25,7 @@ permissions:
   contents: write
 
 env:
-  AWS_REGION: eu-central-1
+  AWS_REGION: {{ secrets.REGION }}
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
@@ -107,6 +107,11 @@ jobs:
             sed -i "s|tag:.*|tag: \"${VERSION}\"|" "${VALUES_FILE}"
           done
 
+      - name: Prepare Helm values for Java app
+        run: |
+          sed "s/ACCOUNT_ID/${{ secrets.AWS_ACCOUNT_ID }}/g; s/REGION/${{ secrets.AWS_REGION }}/g" \
+            helm/values/java-app/prod.yaml.tpl > helm/values/java-app/prod.yaml 
+
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
@@ -142,7 +147,7 @@ jobs:
           for i in $(seq 1 30); do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ vars.PHP_APP_URL }}/health" 2>/dev/null || echo "000")
             if [[ "$STATUS" == "200" ]]; then
-              echo "✅ PHP app is healthy!"
+              echo "PHP app is healthy!"
               BODY=$(curl -s "${{ vars.PHP_APP_URL }}/health")
               echo "$BODY" | jq . || echo "$BODY"
               exit 0
@@ -150,7 +155,7 @@ jobs:
             echo "  Attempt $i/30: HTTP $STATUS — waiting 10s..."
             sleep 10
           done
-          echo "❌ PHP app health check failed after 5 minutes"
+          echo "PHP app health check failed after 5 minutes"
           exit 1
 
       - name: Health check — Java App
@@ -161,7 +166,7 @@ jobs:
           for i in $(seq 1 30); do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ vars.JAVA_APP_URL }}/health" 2>/dev/null || echo "000")
             if [[ "$STATUS" == "200" ]]; then
-              echo "✅ Java app is healthy!"
+              echo "Java app is healthy!"
               BODY=$(curl -s "${{ vars.JAVA_APP_URL }}/health")
               echo "$BODY" | jq . || echo "$BODY"
               exit 0
@@ -169,7 +174,7 @@ jobs:
             echo "  Attempt $i/30: HTTP $STATUS — waiting 10s..."
             sleep 10
           done
-          echo "❌ Java app health check failed after 5 minutes"
+          echo "Java app health check failed after 5 minutes"
           exit 1
 
       # ────────────────────────────────────────────────────────────────────
@@ -179,7 +184,7 @@ jobs:
       - name: Auto-rollback on failure
         if: steps.health-php.outcome == 'failure' || steps.health-java.outcome == 'failure'
         run: |
-          echo "🔄 Health check failed — rolling back to previous version..."
+          echo "Health check failed — rolling back to previous version..."
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
