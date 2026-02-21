@@ -14,7 +14,7 @@ docker-php-app/
     └── index.php           # Application entry point
 ```
 
-## Endpoints
+## Endpoints ##
 
 | Method | Path      | Description                          | Response |
 |--------|-----------|--------------------------------------|----------|
