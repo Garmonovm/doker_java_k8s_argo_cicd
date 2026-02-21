@@ -45,10 +45,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: debug
-        run: |
-          echo ${{ env.AWS_REGION }}
-
       - name: Get version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
@@ -56,7 +52,6 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          audience: sts.amazonaws.com
           role-to-assume: ${{ secrets.ECR_AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
