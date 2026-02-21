@@ -1,0 +1,41 @@
+# ===========================================================================
+# PHP App — Production (watches main branch)
+# ArgoCD auto-syncs when CD pipeline updates the values file
+# ===========================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: php-app-prod
+  namespace: argocd
+  labels:
+    app: php-app
+    env: prod
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: allflex-apps
+
+  source:
+    repoURL: https://github.com/Garmonovm/doker_java_k8s_argo_cicd
+    targetRevision: main
+    path: helm/microservice
+    helm:
+      valueFiles:
+        - ../values/php-app/prod.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

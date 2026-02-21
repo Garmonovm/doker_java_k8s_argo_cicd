@@ -1,0 +1,16 @@
+Microservice deployed successfully!
+
+Release: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+{{- if .Values.ingress.enabled }}
+
+Access via ALB Ingress:
+  Run: kubectl get ingress {{ include "microservice.fullname" . }} -n {{ .Release.Namespace }}
+  The ALB DNS will be available in the ADDRESS column.
+{{- else }}
+
+Access via port-forward:
+  kubectl port-forward svc/{{ include "microservice.fullname" . }} 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+  curl http://localhost:8080/health
+{{- end }}

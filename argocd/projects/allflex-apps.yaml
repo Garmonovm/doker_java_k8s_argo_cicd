@@ -1,0 +1,30 @@
+# ===========================================================================
+# ArgoCD Project — isolates microservices from other ArgoCD apps
+# ===========================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: allflex-apps
+  namespace: argocd
+spec:
+  description: "allflex microservices java and php"
+
+  sourceRepos:
+    - "https://github.com/Garmonovm/doker_java_k8s_argo_cicd"  #GitHub org/repo
+
+  # Allowed destination namespaces
+  destinations:
+    - namespace: development
+      server: https://kubernetes.default.svc
+    - namespace: prod
+      server: https://kubernetes.default.svc
+
+  # Allow all cluster-scoped resources needed by the apps
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+
+  # Allow all namespace-scoped resources
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

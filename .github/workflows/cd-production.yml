@@ -1,0 +1,193 @@
+# ============================================================================
+# CD Pipeline — Build Release, Deploy to Production, Verify Health
+# Triggers: push of version tags (v*)
+#
+# Flow:
+#   1. Build fresh images from tagged commit
+#   2. Tag images with version (v1.0.0) + sha
+#   3. Scan production images
+#   4. Push to ECR
+#   5. Update Helm prod values with version tag
+#   6. ArgoCD auto-syncs prod namespace
+#   7. Verify /health endpoint is accessible
+#   8. Auto-rollback on health check failure
+# ============================================================================
+
+name: CD — Deploy to Production
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write
+  contents: write
+
+env:
+  AWS_REGION: eu-central-1
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # Step 1: Build, scan, and push all service images with release tag
+  # ──────────────────────────────────────────────────────────────────────────
+  release:
+    name: "Release: ${{ matrix.app }}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: php-app
+            context: docker-php-app
+          - app: java-app
+            context: docker-java-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build production image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: false
+          load: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ matrix.app }}:${{ steps.version.outputs.VERSION }}
+            ${{ steps.ecr.outputs.registry }}/${{ matrix.app }}:sha-${{ github.sha }}
+
+      - name: Scan production image with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: "${{ steps.ecr.outputs.registry }}/${{ matrix.app }}:${{ steps.version.outputs.VERSION }}"
+          format: table
+          exit-code: 1
+          severity: CRITICAL    # Production: fail only on CRITICAL
+          timeout: 10m
+
+      - name: Push to ECR
+        run: |
+          docker push "${{ steps.ecr.outputs.registry }}/${{ matrix.app }}:${{ steps.version.outputs.VERSION }}"
+          docker push "${{ steps.ecr.outputs.registry }}/${{ matrix.app }}:sha-${GITHUB_SHA::7}" || true
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Step 2: Update Helm prod values → ArgoCD auto-syncs to prod
+  # ──────────────────────────────────────────────────────────────────────────
+  update-prod-manifests:
+    name: Update Production Manifests
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update production values
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          echo "Releasing version: ${VERSION}"
+
+          for app in php-app java-app; do
+            VALUES_FILE="helm/values/${app}/prod.yaml"
+            echo "  → ${VALUES_FILE}"
+            sed -i "s|tag:.*|tag: \"${VERSION}\"|" "${VALUES_FILE}"
+          done
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add helm/values/
+          git diff --staged --quiet && echo "No changes to commit" && exit 0
+          git commit -m "release: deploy ${GITHUB_REF_NAME} to production [skip ci]"
+          git push
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Step 3: Verify deployment health → auto-rollback on failure
+  # ──────────────────────────────────────────────────────────────────────────
+  verify-deployment:
+    name: Verify Production Health
+    needs: update-prod-manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for ArgoCD sync
+        run: |
+          echo "Waiting 120s for ArgoCD to detect changes and sync..."
+          sleep 120
+
+      - name: Health check — PHP App
+        id: health-php
+        continue-on-error: true
+        run: |
+          echo "Checking PHP app health at: ${{ vars.PHP_APP_URL }}/health"
+          for i in $(seq 1 30); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ vars.PHP_APP_URL }}/health" 2>/dev/null || echo "000")
+            if [[ "$STATUS" == "200" ]]; then
+              echo "✅ PHP app is healthy!"
+              BODY=$(curl -s "${{ vars.PHP_APP_URL }}/health")
+              echo "$BODY" | jq . || echo "$BODY"
+              exit 0
+            fi
+            echo "  Attempt $i/30: HTTP $STATUS — waiting 10s..."
+            sleep 10
+          done
+          echo "❌ PHP app health check failed after 5 minutes"
+          exit 1
+
+      - name: Health check — Java App
+        id: health-java
+        continue-on-error: true
+        run: |
+          echo "Checking Java app health at: ${{ vars.JAVA_APP_URL }}/health"
+          for i in $(seq 1 30); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ vars.JAVA_APP_URL }}/health" 2>/dev/null || echo "000")
+            if [[ "$STATUS" == "200" ]]; then
+              echo "✅ Java app is healthy!"
+              BODY=$(curl -s "${{ vars.JAVA_APP_URL }}/health")
+              echo "$BODY" | jq . || echo "$BODY"
+              exit 0
+            fi
+            echo "  Attempt $i/30: HTTP $STATUS — waiting 10s..."
+            sleep 10
+          done
+          echo "❌ Java app health check failed after 5 minutes"
+          exit 1
+
+      # ────────────────────────────────────────────────────────────────────
+      # Auto-Rollback: if ANY health check failed, revert the Git commit
+      # ArgoCD will detect the revert and sync back to the previous version
+      # ────────────────────────────────────────────────────────────────────
+      - name: Auto-rollback on failure
+        if: steps.health-php.outcome == 'failure' || steps.health-java.outcome == 'failure'
+        run: |
+          echo "🔄 Health check failed — rolling back to previous version..."
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Revert the last commit (the values update)
+          git revert HEAD --no-edit
+          git push
+
+          echo "::error::Production health check failed! Rolled back to previous version."
+          echo "Check ArgoCD dashboard for sync status."
+          exit 1

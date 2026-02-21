@@ -1,0 +1,51 @@
+# ===========================================================================
+# PHP App — Development environment values
+# Deployed to "development" namespace via ArgoCD (develop branch)
+# ===========================================================================
+
+fullnameOverride: php-app
+
+image:
+  repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/php-app
+  tag: "sha-latest"    # Adding automatically by CI pipeline
+  pullPolicy: Always
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/group.name: development
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+  hosts:
+    - paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: false
+
+env:
+  - name: APP_NAME
+    value: php-app
+  - name: APP_VERSION
+    value: "1.0.0"
+  - name: APP_DEBUG
+    value: "true"

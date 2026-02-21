@@ -1,0 +1,41 @@
+# ===========================================================================
+# PHP App — Development (watches develop branch)
+# ArgoCD auto-syncs when CI updates the values file
+# ===========================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: php-app-development
+  namespace: argocd
+  labels:
+    app: php-app
+    env: development
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: allflex-apps
+
+  source:
+    repoURL: https://github.com/Garmonovm/doker_java_k8s_argo_cicd
+    targetRevision: develop
+    path: helm/microservice
+    helm:
+      valueFiles:
+        - ../values/php-app/development.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: development
+
+  syncPolicy:
+    automated:
+      prune: true       # Remove resources no longer in Git
+      selfHeal: true    # Revert manual kubectl changes
+    syncOptions:
+      - CreateNamespace=true   # Auto-create "development" namespace
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
