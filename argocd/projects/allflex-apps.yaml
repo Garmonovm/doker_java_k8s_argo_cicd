@@ -14,9 +14,11 @@ spec:
 
   # Allowed destination namespaces
   destinations:
+    - namespace: argocd
+      server: https://kubernetes.default.svc
     - namespace: development
       server: https://kubernetes.default.svc
-    - namespace: prod
+    - namespace: production
       server: https://kubernetes.default.svc
 
   # Allow all cluster-scoped resources needed by the apps
