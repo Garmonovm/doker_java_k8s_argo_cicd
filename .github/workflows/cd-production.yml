@@ -9,6 +9,7 @@
 #   6. ArgoCD auto-syncs prod namespace
 #   7. Verify /health endpoint is accessible
 #   8. Auto-rollback on health check failure
+# NOTE Only for JAVA app not matrix detect.
 # ============================================================================
 
 name: CD — Deploy to Production
@@ -90,6 +91,11 @@ jobs:
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare Helm values for Java app from template
+        run: |
+          sed "s/ACCOUNT_ID/${{ secrets.AWS_ACCOUNT_ID }}/g; s/REGION/${{ secrets.AWS_REGION }}/g" \
+            helm/values/java-app/prod.yaml.tpl > helm/values/java-app/prod.yaml
+
       - name: Update production values
         run: |
           VERSION="${GITHUB_REF_NAME}"
@@ -99,12 +105,7 @@ jobs:
             VALUES_FILE="helm/values/${app}/prod.yaml"
             echo "  → ${VALUES_FILE}"
             sed -i "s|tag:.*|tag: \"${VERSION}\"|" "${VALUES_FILE}"
-          done
-
-      - name: Prepare Helm values for Java app
-        run: |
-          sed "s/ACCOUNT_ID/${{ secrets.AWS_ACCOUNT_ID }}/g; s/REGION/${{ secrets.AWS_REGION }}/g" \
-            helm/values/java-app/prod.yaml.tpl > helm/values/java-app/prod.yaml 
+          done 
 
       - name: Commit and push
         run: |
