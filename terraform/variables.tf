@@ -80,7 +80,7 @@ variable "capacity_type" {
 variable "node_group_min_size" {
   description = "Minimum number of nodes in the node group"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "node_group_max_size" {
@@ -92,7 +92,7 @@ variable "node_group_max_size" {
 variable "node_group_desired_size" {
   description = "Desired number of nodes in the node group"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "eks_admin_user" {
