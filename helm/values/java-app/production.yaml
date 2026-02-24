@@ -7,7 +7,7 @@ fullnameOverride: java-app
 
 image:
   repository: 172483345533.dkr.ecr.eu-central-1.amazonaws.com/java-app
-  tag: "v1.0.2"
+  tag: "v1.0.3"
   pullPolicy: IfNotPresent
 
 replicaCount: 2
@@ -71,6 +71,6 @@ env:
   - name: APP_NAME
     value: java-app
   - name: APP_VERSION
-    value: "1.0.0"
+    value: "v1.0.3"
   - name: JAVA_OPTS
     value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
