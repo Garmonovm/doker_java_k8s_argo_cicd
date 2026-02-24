@@ -1,10 +1,8 @@
 # ============================================================================
 # CD Pipeline — Build Release, Deploy to Production, Verify Health
 # Triggers: push of version tags (v*)
-#
-# Flow:
 #   1. Build new image on manual tag in main branch (could be automated with semantic-release)
-#   2. Tag images with version (v1.0.0) + sha
+#   2. Tag images with version (v1.0.0)
 #   3. Scan production images
 #   4. Push to ECR
 #   5. Update Helm prod values with version tag
