@@ -6,7 +6,7 @@
 fullnameOverride: php-app
 
 image:
-  repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/php-app
+  repository: "${ECR_REPOSITORY}/php-app"
   tag: "sha-56c9a80"
   pullPolicy: Always
 

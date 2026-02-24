@@ -5,7 +5,7 @@
 fullnameOverride: java-app
 
 image:
-  repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/java-app
+  repository: "${ECR_REPOSITORY}/java-app"
   tag: "sha-latest"    # Updated automatically by CI pipeline
   pullPolicy: Always
 

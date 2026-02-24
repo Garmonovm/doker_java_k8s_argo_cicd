@@ -6,7 +6,7 @@
 fullnameOverride: java-app
 
 image:
-  repository: 172483345533.dkr.ecr.eu-central-1.amazonaws.com/java-app
+  repository: "${ECR_REPOSITORY}/java-app"
   tag: "v1.0.3"
   pullPolicy: IfNotPresent
 

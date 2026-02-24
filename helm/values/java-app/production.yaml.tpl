@@ -6,7 +6,7 @@
 fullnameOverride: java-app
 
 image:
-  repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/java-app
+  repository: "${ECR_REPOSITORY}/java-app"
   tag: "v1.0.0"    # Updated by CD pipeline on release tag
   pullPolicy: IfNotPresent
 
