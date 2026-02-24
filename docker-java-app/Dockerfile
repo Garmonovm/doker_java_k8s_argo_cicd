@@ -14,7 +14,7 @@ WORKDIR /build
 # Copy POM first (Docker layer caching for dependencies)
 COPY pom.xml .
 
-# Download all dependencies offline — cached unless pom.xml changes
+## Download all dependencies offline — cached unless pom.xml changes
 RUN mvn dependency:go-offline -B
 
 ## Copy application source code
