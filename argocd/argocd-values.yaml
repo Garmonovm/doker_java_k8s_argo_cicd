@@ -1,7 +1,15 @@
-## Expose ArgoCD without domain and TLS
+global:
+  domain: ""
+
+configs:
+  params:
+    server.insecure: "true"
+
 server:
   extraArgs:
     - --insecure
+    - --basehref=/argocd    # 👈 tells UI where to load assets from
+    - --rootpath=/argocd    # 👈 tells server to serve from /argocd
 
   ingress:
     enabled: true
@@ -12,8 +20,8 @@ server:
       alb.ingress.kubernetes.io/group.name: ingress-shared-alb
       alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
       alb.ingress.kubernetes.io/backend-protocol: HTTP
-    # Use the ALB DNS name after first apply, or leave empty for now
-    hostname: ""   # or remove this entirely
+    path: /argocd
+    pathType: Prefix
 
   service:
     type: ClusterIP

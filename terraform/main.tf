@@ -102,16 +102,16 @@ module "eks_blueprints_addons" {
   }
   enable_cluster_autoscaler = true
   cluster_autoscaler = {
-    chart_version = "9.46.6"
+    chart_version = "9.55.1"
   }
 
   enable_argocd = true
   argocd = {
-    namespace = "argocd"
-    values    = [templatefile("${path.module}/../argocd/argocd-values.yaml", {})]
+    namespace     = "argocd"
+    chart_version = "7.8.3" # 👈 specify version here
+    values        = [templatefile("${path.module}/../argocd/argocd-values.yaml", {})]
   }
 }
-
 
 resource "aws_ecr_repository" "this" {
   for_each = var.ecr_repositories
