@@ -1,20 +1,13 @@
 # ==========================================================================
-# CI/CD Pipeline
-#   1. Detect which services have code changes (matrix: php-app, java-app)
-#   2. On PR to develop: perform lint, build, and Trivy scan for changed services.
-#   3. On merge to develop: build, scan, push to ECR with sha tag, update Helm values → ArgoCD auto-syncs to development.
+# CD Pipeline - Develop Branch
+# Flow: On merge to develop → Detect changes → Build & Push to ECR → Update Helm
 # ==========================================================================
 
-name: CI/CD — Build & Deploy
+name: CD — Deploy to Development
 
 on:
-  pull_request:
-    branches: [develop]
-    paths-ignore:
-      - "terraform/**"
-      - "argocd/**"
   push:
-    branches: [develop, main]
+    branches: [develop]
     paths-ignore:
       - "terraform/**"
       - "argocd/**"
@@ -63,71 +56,11 @@ jobs:
             echo "any_changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # Lint Dockerfiles on PR to develop
-  lint:
-    name: "Lint: ${{ matrix.service.app }}"
-    needs: changes
-    if: needs.changes.outputs.any_changed == 'true' && github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        service: ${{ fromJson(needs.changes.outputs.services) }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Lint Dockerfile with hadolint
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: ${{ matrix.service.context }}/Dockerfile
-          failure-threshold: warning
-
-  # Build and Scan on PR to develop
-  build-scan-pr:
-    name: "Build & Scan (PR): ${{ matrix.service.app }}"
-    needs: [changes, lint]
-    if: needs.changes.outputs.any_changed == 'true' && github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        service: ${{ fromJson(needs.changes.outputs.services) }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.ECR_AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: ${{ matrix.service.context }}
-          push: false
-          load: true
-          tags: |
-            ${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:pr-${{ github.sha }}
-
-      # - name: Scan image with Trivy
-      #   uses: aquasecurity/trivy-action@0.28.0
-      #   with:
-      #     image-ref: "${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:pr-${{ github.sha }}"
-      #     format: table
-      #     exit-code: 1
-      #     severity: CRITICAL,HIGH
-      #     timeout: 10m
-
-  # Step 3: Build, Scan, and Push to ECR with SHA on merge to develop
+  # Build, Scan, and Push to ECR with SHA on merge to develop
   build-develop:
-    name: "Build & Push (Develop): ${{ matrix.service.app }}"
+    name: "Build & Push: ${{ matrix.service.app }}"
     needs: changes
-    if: needs.changes.outputs.any_changed == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    if: needs.changes.outputs.any_changed == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -167,7 +100,7 @@ jobs:
   update-helm-develop:
     name: Update Helm (Develop)
     needs: [changes, build-develop]
-    if: needs.changes.outputs.any_changed == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    if: needs.changes.outputs.any_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
