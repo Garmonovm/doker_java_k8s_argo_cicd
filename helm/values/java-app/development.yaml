@@ -6,7 +6,7 @@ fullnameOverride: java-app
 
 image:
   repository: 172483345533.dkr.ecr.eu-central-1.amazonaws.com/java-app
-  tag: "sha-839ab45"
+  tag: "sha-951e8aa"
   pullPolicy: Always
 
 replicaCount: 1
