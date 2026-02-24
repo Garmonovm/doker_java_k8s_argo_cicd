@@ -64,7 +64,6 @@ jobs:
           load: true
           tags: |
             ${{ steps.ecr.outputs.registry }}/${{ matrix.app }}:${{ steps.version.outputs.VERSION }}
-            ${{ steps.ecr.outputs.registry }}/${{ matrix.app }}:sha-${{ github.sha }}
 
       # - name: Scan production image with Trivy
       #   uses: aquasecurity/trivy-action@0.28.0
@@ -78,7 +77,6 @@ jobs:
       - name: Push to ECR
         run: |
           docker push "${{ steps.ecr.outputs.registry }}/${{ matrix.app }}:${{ steps.version.outputs.VERSION }}"
-          docker push "${{ steps.ecr.outputs.registry }}/${{ matrix.app }}:sha-${GITHUB_SHA::7}" || true
 
   # Step 2: Update Helm prod values → ArgoCD auto-syncs to prod
   update-prod-manifests:

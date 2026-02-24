@@ -101,6 +101,9 @@ module "eks_blueprints_addons" {
     ]
   }
   enable_cluster_autoscaler = true
+  cluster_autoscaler = {
+    chart_version = "9.46.6"
+  }
 
   enable_argocd = true
   argocd = {
