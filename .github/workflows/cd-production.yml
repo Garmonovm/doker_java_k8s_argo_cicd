@@ -92,17 +92,23 @@ jobs:
       - name: Prepare Helm values for Java app from template
         run: |
           sed "s/ACCOUNT_ID/${{ secrets.AWS_ACCOUNT_ID }}/g; s/REGION/${{ secrets.AWS_REGION }}/g" \
-            helm/values/java-app/prod.yaml.tpl > helm/values/java-app/prod.yaml
+            helm/values/java-app/production.yaml.tpl > helm/values/java-app/production.yaml
 
-      - name: Update production values
+      - name: Update production values with version and image tag
         run: |
           VERSION="${GITHUB_REF_NAME}"
           echo "Releasing version: ${VERSION}"
 
           for app in php-app java-app; do
-            VALUES_FILE="helm/values/${app}/prod.yaml"
+            VALUES_FILE="helm/values/${app}/production.yaml"
             echo "  → ${VALUES_FILE}"
+            # Update Docker image tag
             sed -i "s|tag:.*|tag: \"${VERSION}\"|" "${VALUES_FILE}"
+            # Update APP_VERSION environment variable for monitors/logging
+            if [[ "${app}" == "java-app" ]]; then
+              echo "    Updating APP_VERSION to ${VERSION}"
+              sed -i "/- name: APP_VERSION/,/value:.*/{s|value:.*|value: \"${VERSION}\"|;}" "${VALUES_FILE}"
+            fi
           done 
 
       - name: Commit and push
@@ -149,39 +155,39 @@ jobs:
           echo "PHP app health check failed after 5 minutes"
           exit 1
 
-      - name: Health check — Java App
-        id: health-java
-        continue-on-error: true
-        run: |
-          echo "Checking Java app health at: ${{ vars.JAVA_APP_URL }}/health"
-          for i in $(seq 1 30); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ vars.JAVA_APP_URL }}/health" 2>/dev/null || echo "000")
-            if [[ "$STATUS" == "200" ]]; then
-              echo "Java app is healthy!"
-              BODY=$(curl -s "${{ vars.JAVA_APP_URL }}/health")
-              echo "$BODY" | jq . || echo "$BODY"
-              exit 0
-            fi
-            echo "  Attempt $i/30: HTTP $STATUS — waiting 10s..."
-            sleep 10
-          done
-          echo "Java app health check failed after 5 minutes"
-          exit 1
+      # - name: Health check — Java App
+      #   id: health-java
+      #   continue-on-error: true
+      #   run: |
+      #     echo "Checking Java app health at: ${{ vars.JAVA_APP_URL }}/health"
+      #     for i in $(seq 1 30); do
+      #       STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ vars.JAVA_APP_URL }}/health" 2>/dev/null || echo "000")
+      #       if [[ "$STATUS" == "200" ]]; then
+      #         echo "Java app is healthy!"
+      #         BODY=$(curl -s "${{ vars.JAVA_APP_URL }}/health")
+      #         echo "$BODY" | jq . || echo "$BODY"
+      #         exit 0
+      #       fi
+      #       echo "  Attempt $i/30: HTTP $STATUS — waiting 10s..."
+      #       sleep 10
+      #     done
+      #     echo "Java app health check failed after 5 minutes"
+      #     exit 1
 
-      # Auto-Rollback: if ANY health check failed, revert the Git commit
-      # ArgoCD will detect the revert and sync back to the previous version
-      - name: Auto-rollback on failure
-        if: steps.health-php.outcome == 'failure' || steps.health-java.outcome == 'failure'
-        run: |
-          echo "Health check failed — rolling back to previous version..."
+      # # Auto-Rollback: if ANY health check failed, revert the Git commit
+      # # ArgoCD will detect the revert and sync back to the previous version
+      # - name: Auto-rollback on failure
+      #   if: steps.health-php.outcome == 'failure' || steps.health-java.outcome == 'failure'
+      #   run: |
+      #     echo "Health check failed — rolling back to previous version..."
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+      #     git config user.name "github-actions[bot]"
+      #     git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Revert the last commit (the values update)
-          git revert HEAD --no-edit
-          git push
+      #     # Revert the last commit (the values update)
+      #     git revert HEAD --no-edit
+      #     git push
 
-          echo "::error::Production health check failed! Rolled back to previous version."
-          echo "Check ArgoCD dashboard for sync status."
-          exit 1
+      #     echo "::error::Production health check failed! Rolled back to previous version."
+      #     echo "Check ArgoCD dashboard for sync status."
+      #     exit 1

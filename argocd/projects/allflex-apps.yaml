@@ -10,8 +10,7 @@ spec:
   description: "allflex microservices java and php"
 
   sourceRepos:
-    - "https://github.com/Garmonovm/doker_java_k8s_argo_cicd"  #GitHub org/repo
-
+    - "https://github.com/Garmonovm/doker_java_k8s_argo_cicd"
   # Allowed destination namespaces
   destinations:
     - namespace: argocd

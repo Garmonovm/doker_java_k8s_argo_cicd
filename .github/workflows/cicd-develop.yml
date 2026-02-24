@@ -123,7 +123,13 @@ jobs:
             VALUES_FILE="helm/values/${APP}/development.yaml"
             if [ -f "$VALUES_FILE" ]; then
               echo "  → ${VALUES_FILE}"
+              # Update Docker image tag
               sed -i "s|tag:.*|tag: \"${IMAGE_TAG}\"|" "${VALUES_FILE}"
+              # Update APP_VERSION environment variable for Java app
+              if [[ "${APP}" == "java-app" ]]; then
+                echo "    Updating APP_VERSION to ${IMAGE_TAG}"
+                sed -i "/- name: APP_VERSION/,/value:.*/{s|value:.*|value: \"${IMAGE_TAG}\"|;}" "${VALUES_FILE}"
+              fi
             fi
           done
 

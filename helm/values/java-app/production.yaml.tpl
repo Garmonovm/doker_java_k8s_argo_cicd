@@ -1,13 +1,13 @@
 # ===========================================================================
 # Java App — Production environment values
-# Deployed to "prod" namespace via ArgoCD (main branch, tag trigger)
+# Deployed to "production" namespace via ArgoCD (main branch, tag trigger)
 # ===========================================================================
 
 fullnameOverride: java-app
 
 image:
-  repository: 172483345533.dkr.ecr.eu-central-1.amazonaws.com/java-app
-  tag: "v1.0.2"
+  repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/java-app
+  tag: "v1.0.0"    # Updated by CD pipeline on release tag
   pullPolicy: IfNotPresent
 
 replicaCount: 2
@@ -26,7 +26,7 @@ ingress:
     alb.ingress.kubernetes.io/healthcheck-path: /health
     alb.ingress.kubernetes.io/group.name: production
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
-    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:... # TODO: for prod  Add ACM cert for HTTPS
+    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:... # TODO: for production  Add ACM cert for HTTPS
     # alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
     # alb.ingress.kubernetes.io/ssl-redirect: "443"
   hosts:

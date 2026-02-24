@@ -33,6 +33,8 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - PruneLast=true
+    refreshInterval: 30s
     retry:
       limit: 3
       backoff:
