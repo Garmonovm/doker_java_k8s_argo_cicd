@@ -6,7 +6,7 @@ fullnameOverride: java-app
 
 image:
   repository: 172483345533.dkr.ecr.eu-central-1.amazonaws.com/java-app
-  tag: "sha-latest"    # Updated automatically by CI pipeline
+  tag: "sha-839ab45"
   pullPolicy: Always
 
 replicaCount: 1
