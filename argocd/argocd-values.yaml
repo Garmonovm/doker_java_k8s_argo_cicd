@@ -1,0 +1,18 @@
+## Expose ArgoCD without domain and TLS
+server:
+  extraArgs:
+    - --insecure
+
+  ingress:
+    enabled: true
+    ingressClassName: alb
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+      alb.ingress.kubernetes.io/backend-protocol: HTTP
+    # Use the ALB DNS name after first apply, or leave empty for now
+    hostname: ""   # or remove this entirely
+
+  service:
+    type: ClusterIP

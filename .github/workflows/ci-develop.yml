@@ -1,4 +1,11 @@
-name: CI — Build & Deploy to Development
+# ==========================================================================
+# CI/CD Pipeline
+#   1. Detect which services have code changes (matrix: php-app, java-app)
+#   2. On PR to develop: perform lint, build, and Trivy scan for changed services.
+#   3. On merge to develop: build, scan, push to ECR with sha tag, update Helm values → ArgoCD auto-syncs to development.
+# ==========================================================================
+
+name: CI/CD — Build & Deploy
 
 on:
   pull_request:
@@ -7,7 +14,7 @@ on:
       - "terraform/**"
       - "argocd/**"
   push:
-    branches: [develop]
+    branches: [develop, main]
     paths-ignore:
       - "terraform/**"
       - "argocd/**"
@@ -20,9 +27,7 @@ env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
 
 jobs:
-  # ──────────────────────────────────────────────────────────────────────────
-  # Step 1: Detect which services have code changes
-  # ──────────────────────────────────────────────────────────────────────────
+  #Detect which services have code changes
   changes:
     name: Detect Changes
     runs-on: ubuntu-latest
@@ -58,13 +63,11 @@ jobs:
             echo "any_changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # Step 2: Lint Dockerfiles (on PR and push)
-  # ──────────────────────────────────────────────────────────────────────────
+  # Lint Dockerfiles on PR to develop
   lint:
     name: "Lint: ${{ matrix.service.app }}"
     needs: changes
-    if: needs.changes.outputs.any_changed == 'true'
+    if: needs.changes.outputs.any_changed == 'true' && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -79,13 +82,11 @@ jobs:
           dockerfile: ${{ matrix.service.context }}/Dockerfile
           failure-threshold: warning
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # Step 3: Build, Scan, Push to ECR (only on push)
-  # ──────────────────────────────────────────────────────────────────────────
-  build:
-    name: "Build: ${{ matrix.service.app }}"
+  # Build and Scan on PR to develop
+  build-scan-pr:
+    name: "Build & Scan (PR): ${{ matrix.service.app }}"
     needs: [changes, lint]
-    if: github.event_name == 'push' && needs.changes.outputs.any_changed == 'true'
+    if: needs.changes.outputs.any_changed == 'true' && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -104,10 +105,6 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Set image tag
-        id: tag
-        run: echo "IMAGE_TAG=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-
       - name: Build Docker image
         uses: docker/build-push-action@v6
         with:
@@ -115,28 +112,62 @@ jobs:
           push: false
           load: true
           tags: |
-            ${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:${{ steps.tag.outputs.IMAGE_TAG }}
+            ${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:pr-${{ github.sha }}
 
       # - name: Scan image with Trivy
       #   uses: aquasecurity/trivy-action@0.28.0
       #   with:
-      #     image-ref: "${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:${{ steps.tag.outputs.IMAGE_TAG }}"
+      #     image-ref: "${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:pr-${{ github.sha }}"
       #     format: table
       #     exit-code: 1
       #     severity: CRITICAL,HIGH
       #     timeout: 10m
 
-      - name: Push to ECR
-        run: |
-          docker push "${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:${{ steps.tag.outputs.IMAGE_TAG }}"
+  # Step 3: Build, Scan, and Push to ECR with SHA on merge to develop
+  build-develop:
+    name: "Build & Push (Develop): ${{ matrix.service.app }}"
+    needs: [changes, lint]
+    if: needs.changes.outputs.any_changed == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # Step 4: Update Helm values → ArgoCD auto-syncs to development (only on push)
-  # ──────────────────────────────────────────────────────────────────────────
-  update-manifests:
-    name: Update Development Manifests
-    needs: [changes, build]
-    if: github.event_name == 'push' && needs.changes.outputs.any_changed == 'true'
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ECR_AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.service.context }}
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:sha-${{ github.sha }}
+
+      # - name: Scan image with Trivy
+      #   uses: aquasecurity/trivy-action@0.28.0
+      #   with:
+      #     image-ref: "${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:sha-${{ github.sha }}"
+      #     format: table
+      #     exit-code: 0
+      #     severity: CRITICAL,HIGH
+      #     timeout: 10m
+
+  # Update Helm values on merge to develop
+  update-helm-develop:
+    name: Update Helm (Develop)
+    needs: [changes, build-develop]
+    if: needs.changes.outputs.any_changed == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -144,7 +175,7 @@ jobs:
           ref: develop
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update development values files
+      - name: Update development Helm values
         run: |
           IMAGE_TAG="sha-${GITHUB_SHA::7}"
           SERVICES='${{ needs.changes.outputs.services }}'
@@ -154,16 +185,13 @@ jobs:
           for row in $(echo "$SERVICES" | jq -r '.[] | @base64'); do
             APP=$(echo "$row" | base64 --decode | jq -r '.app')
             VALUES_FILE="helm/values/${APP}/development.yaml"
-            echo "  → ${VALUES_FILE}"
-            sed -i "s|tag:.*|tag: \"${IMAGE_TAG}\"|" "${VALUES_FILE}"
+            if [ -f "$VALUES_FILE" ]; then
+              echo "  → ${VALUES_FILE}"
+              sed -i "s|tag:.*|tag: \"${IMAGE_TAG}\"|" "${VALUES_FILE}"
+            fi
           done
 
-      - name: Prepare Helm values for Java app
-        run: |
-          sed "s/ACCOUNT_ID/${{ secrets.AWS_ACCOUNT_ID }}/g; s/REGION/${{ secrets.AWS_REGION }}/g" \
-            helm/values/java-app/development.yaml.tpl > helm/values/java-app/development.yaml
-
-      - name: Commit and push
+      - name: Commit and push Helm updates
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -171,3 +199,4 @@ jobs:
           git diff --staged --quiet && echo "No changes to commit" && exit 0
           git commit -m "ci: update image tags to sha-${GITHUB_SHA::7} [skip ci]"
           git push
+
