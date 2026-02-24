@@ -126,7 +126,7 @@ jobs:
   # Step 3: Build, Scan, and Push to ECR with SHA on merge to develop
   build-develop:
     name: "Build & Push (Develop): ${{ matrix.service.app }}"
-    needs: [changes, lint]
+    needs: changes
     if: needs.changes.outputs.any_changed == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     strategy:
@@ -199,4 +199,3 @@ jobs:
           git diff --staged --quiet && echo "No changes to commit" && exit 0
           git commit -m "ci: update image tags to sha-${GITHUB_SHA::7} [skip ci]"
           git push
-
