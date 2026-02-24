@@ -28,7 +28,7 @@ ingress:
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
   hosts:
     - paths:
-        - path: /
+        - path: /php-dev
           pathType: Prefix
 
 resources:

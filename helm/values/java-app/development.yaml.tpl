@@ -27,7 +27,7 @@ ingress:
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
   hosts:
     - paths:
-        - path: /java
+        - path: /java-dev
           pathType: Prefix
 
 resources:

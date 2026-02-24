@@ -31,7 +31,7 @@ ingress:
     # alb.ingress.kubernetes.io/ssl-redirect: "443"
   hosts:
     - paths:
-        - path: /java
+        - path: /java-prod
           pathType: Prefix
 
 resources:
