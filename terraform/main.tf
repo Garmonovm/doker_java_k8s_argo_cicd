@@ -75,9 +75,8 @@ module "eks" {
 }
 
 module "eks_blueprints_addons" {
-  depends_on = [module.eks]
-  source     = "aws-ia/eks-blueprints-addons/aws"
-  version    = "1.22"
+  source  = "aws-ia/eks-blueprints-addons/aws"
+  version = "1.22"
 
   cluster_name      = module.eks.cluster_name
   cluster_endpoint  = module.eks.cluster_endpoint
@@ -106,8 +105,10 @@ module "eks_blueprints_addons" {
   enable_argocd = true
   argocd = {
     namespace = "argocd"
+    values    = [templatefile("${path.module}/../argocd/argocd-values.yaml", {})]
   }
 }
+
 
 resource "aws_ecr_repository" "this" {
   for_each = var.ecr_repositories
@@ -178,7 +179,21 @@ resource "aws_ecr_lifecycle_policy" "this" {
 }
 
 
+##apply root app argocd
+
+# resource "kubernetes_manifest" "argocd_allflex_apps" {
+#   manifest = yamldecode(file("${path.module}/../argocd/projects/allflex-apps.yaml"))
+#   depends_on = [
+#     module.eks_blueprints_addons # Ensure AppProject is created first
+#   ]
+# }
 
 # resource "kubernetes_manifest" "argocd_root_app" {
 #   manifest = yamldecode(file("${path.module}/../argocd/root-app.yaml"))
+
+#   depends_on = [
+#     kubernetes_manifest.argocd_allflex_apps # Ensure AppProject is created first
+#   ]
 # }
+
+

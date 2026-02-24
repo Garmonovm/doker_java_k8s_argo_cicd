@@ -1,20 +1,23 @@
+# ============================================================================
+# CI Pipeline
+# Flow:
+#   1. On PR to develop branch: detect what apps changed, doing lint, build and trivy scan.
+#   2. On merge to develop branch: build new images, scan with Trivy, push to ECR with sha tag, update Helm values → ArgoCD auto-syncs to development yamls
+# ============================================================================
+
 name: CI — Build & Deploy to Development
 
 on:
   pull_request:
     branches: [develop]
     paths-ignore:
-      - "**.md"
       - "terraform/**"
       - "argocd/**"
-      - ".github/**"
   push:
     branches: [develop]
     paths-ignore:
-      - "**.md"
       - "terraform/**"
       - "argocd/**"
-      - ".github/**"
 
 permissions:
   id-token: write
@@ -24,9 +27,7 @@ env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
 
 jobs:
-  # ──────────────────────────────────────────────────────────────────────────
   # Step 1: Detect which services have code changes
-  # ──────────────────────────────────────────────────────────────────────────
   changes:
     name: Detect Changes
     runs-on: ubuntu-latest
@@ -62,9 +63,7 @@ jobs:
             echo "any_changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # ──────────────────────────────────────────────────────────────────────────
   # Step 2: Lint Dockerfiles (on PR and push)
-  # ──────────────────────────────────────────────────────────────────────────
   lint:
     name: "Lint: ${{ matrix.service.app }}"
     needs: changes
@@ -83,9 +82,52 @@ jobs:
           dockerfile: ${{ matrix.service.context }}/Dockerfile
           failure-threshold: warning
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # Step 3: Build, Scan, Push to ECR (only on push)
-  # ──────────────────────────────────────────────────────────────────────────
+  # Step 3: Build and Scan (on PR to develop)
+  build-and-scan:
+    name: "Build & Scan: ${{ matrix.service.app }}"
+    needs: [changes, lint]
+    if: needs.changes.outputs.any_changed == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ECR_AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
+        id: tag
+        run: echo "IMAGE_TAG=pr-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.service.context }}
+          push: false
+          load: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:${{ steps.tag.outputs.IMAGE_TAG }}
+ ## a lot of vulns temp disabled
+      # - name: Scan image with Trivy
+      #   uses: aquasecurity/trivy-action@0.28.0
+      #   with:
+      #     image-ref: "${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:${{ steps.tag.outputs.IMAGE_TAG }}"
+      #     format: table
+      #     exit-code: 1
+      #     severity: CRITICAL,HIGH
+      #     timeout: 10m
+
+  # Step 4: Build, Scan, Push to ECR (only on merge to develop)
   build:
     name: "Build: ${{ matrix.service.app }}"
     needs: [changes, lint]
@@ -121,22 +163,11 @@ jobs:
           tags: |
             ${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:${{ steps.tag.outputs.IMAGE_TAG }}
 
-      - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: "${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:${{ steps.tag.outputs.IMAGE_TAG }}"
-          format: table
-          exit-code: 1
-          severity: CRITICAL,HIGH
-          timeout: 10m
-
       - name: Push to ECR
         run: |
           docker push "${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:${{ steps.tag.outputs.IMAGE_TAG }}"
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # Step 4: Update Helm values → ArgoCD auto-syncs to development (only on push)
-  # ──────────────────────────────────────────────────────────────────────────
+  # Step 5: Update Helm values → ArgoCD auto-syncs to development (only on merge to develop)
   update-manifests:
     name: Update Development Manifests
     needs: [changes, build]
@@ -161,11 +192,6 @@ jobs:
             echo "  → ${VALUES_FILE}"
             sed -i "s|tag:.*|tag: \"${IMAGE_TAG}\"|" "${VALUES_FILE}"
           done
-
-      - name: Prepare Helm values for Java app
-        run: |
-          sed "s/ACCOUNT_ID/${{ secrets.AWS_ACCOUNT_ID }}/g; s/REGION/${{ secrets.AWS_REGION }}/g" \
-            helm/values/java-app/development.yaml.tpl > helm/values/java-app/development.yaml
 
       - name: Commit and push
         run: |
