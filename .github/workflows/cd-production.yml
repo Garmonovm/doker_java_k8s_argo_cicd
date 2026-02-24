@@ -1,16 +1,15 @@
 # ============================================================================
 # CD Pipeline — Build Release, Deploy to Production, Verify Health
 # Triggers: push of version tags (v*)
-#
-# Flow:
 #   1. Build new image on manual tag in main branch (could be automated with semantic-release)
-#   2. Tag images with version (v1.0.0) + sha
+#   2. Tag images with version (v1.0.0)
 #   3. Scan production images
 #   4. Push to ECR
 #   5. Update Helm prod values with version tag
 #   6. ArgoCD auto-syncs prod namespace
 #   7. Verify /health endpoint is accessible
 #   8. Auto-rollback on health check failure
+# NOTE Only for JAVA app not matrix detect.
 # ============================================================================
 
 name: CD — Deploy to Production
@@ -65,7 +64,6 @@ jobs:
           load: true
           tags: |
             ${{ steps.ecr.outputs.registry }}/${{ matrix.app }}:${{ steps.version.outputs.VERSION }}
-            ${{ steps.ecr.outputs.registry }}/${{ matrix.app }}:sha-${{ github.sha }}
 
       # - name: Scan production image with Trivy
       #   uses: aquasecurity/trivy-action@0.28.0
@@ -79,7 +77,6 @@ jobs:
       - name: Push to ECR
         run: |
           docker push "${{ steps.ecr.outputs.registry }}/${{ matrix.app }}:${{ steps.version.outputs.VERSION }}"
-          docker push "${{ steps.ecr.outputs.registry }}/${{ matrix.app }}:sha-${GITHUB_SHA::7}" || true
 
   # Step 2: Update Helm prod values → ArgoCD auto-syncs to prod
   update-prod-manifests:
@@ -92,6 +89,11 @@ jobs:
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare Helm values for Java app from template
+        run: |
+          sed "s/ACCOUNT_ID/${{ secrets.AWS_ACCOUNT_ID }}/g; s/REGION/${{ secrets.AWS_REGION }}/g" \
+            helm/values/java-app/prod.yaml.tpl > helm/values/java-app/prod.yaml
+
       - name: Update production values
         run: |
           VERSION="${GITHUB_REF_NAME}"
@@ -101,12 +103,7 @@ jobs:
             VALUES_FILE="helm/values/${app}/prod.yaml"
             echo "  → ${VALUES_FILE}"
             sed -i "s|tag:.*|tag: \"${VERSION}\"|" "${VALUES_FILE}"
-          done
-
-      - name: Prepare Helm values for Java app
-        run: |
-          sed "s/ACCOUNT_ID/${{ secrets.AWS_ACCOUNT_ID }}/g; s/REGION/${{ secrets.AWS_REGION }}/g" \
-            helm/values/java-app/prod.yaml.tpl > helm/values/java-app/prod.yaml 
+          done 
 
       - name: Commit and push
         run: |

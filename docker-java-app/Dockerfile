@@ -17,10 +17,10 @@ COPY pom.xml .
 # Download all dependencies offline — cached unless pom.xml changes
 RUN mvn dependency:go-offline -B
 
-# Copy application source code
+## Copy application source code
 COPY src ./src
 
-# Build the application JAR (skip tests — they run in CI)
+## Build the application JAR (skip tests — they run in CI)
 RUN mvn package -DskipTests -B
 
 # ---------------------------------------------------------------------------

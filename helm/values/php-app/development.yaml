@@ -7,7 +7,7 @@ fullnameOverride: php-app
 
 image:
   repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/php-app
-  tag: "sha-latest"    # Adding automatically by CI pipeline
+  tag: "sha-56c9a80"
   pullPolicy: Always
 
 replicaCount: 1
