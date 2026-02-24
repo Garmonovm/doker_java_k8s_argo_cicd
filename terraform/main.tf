@@ -181,19 +181,19 @@ resource "aws_ecr_lifecycle_policy" "this" {
 
 ##apply root app argocd
 
-# resource "kubernetes_manifest" "argocd_allflex_apps" {
-#   manifest = yamldecode(file("${path.module}/../argocd/projects/allflex-apps.yaml"))
-#   depends_on = [
-#     module.eks_blueprints_addons # Ensure AppProject is created first
-#   ]
-# }
+resource "kubernetes_manifest" "argocd_allflex_apps" {
+  manifest = yamldecode(file("${path.module}/../argocd/projects/allflex-apps.yaml"))
+  depends_on = [
+    module.eks_blueprints_addons
+  ]
+}
 
-# resource "kubernetes_manifest" "argocd_root_app" {
-#   manifest = yamldecode(file("${path.module}/../argocd/root-app.yaml"))
+resource "kubernetes_manifest" "argocd_root_app" {
+  manifest = yamldecode(file("${path.module}/../argocd/root-app.yaml"))
 
-#   depends_on = [
-#     kubernetes_manifest.argocd_allflex_apps # Ensure AppProject is created first
-#   ]
-# }
+  depends_on = [
+    kubernetes_manifest.argocd_allflex_apps
+  ]
+}
 
 
