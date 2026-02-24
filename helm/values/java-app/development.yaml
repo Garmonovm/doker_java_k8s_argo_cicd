@@ -1,6 +1,6 @@
-# Java App — Development environment values
-# Deployed to "development" namespace via ArgoCD (develop branch)
-# tmpl to hide the sensetive parameters for public repo.
+# #Java App — Development environment values
+# #Deployed to "development" namespace via ArgoCD (develop branch)
+# #tmpl to hide the sensetive parameters for public repo.
 
 fullnameOverride: java-app
 
