@@ -29,8 +29,8 @@ variable "ecr_repositories" {
     force_delete         = optional(bool, false)
   }))
   default = {
-    # "php-app"  = {}
-    "java-app" = {}
+    "php-app"  = { force_delete = true } #false
+    "java-app" = { force_delete = true } # false
   }
 }
 
