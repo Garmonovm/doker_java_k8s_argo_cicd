@@ -10,7 +10,7 @@ image:
   tag: "v1.0.3"
   pullPolicy: IfNotPresent
 
-replicaCount: 2
+replicaCount: 1
 
 service:
   type: ClusterIP
@@ -24,7 +24,7 @@ ingress:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/healthcheck-path: /health
-    alb.ingress.kubernetes.io/group.name: production
+    alb.ingress.kubernetes.io/group.name: ingress-shared-alb
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
     # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:... # TODO: for production  Add ACM cert for HTTPS
     # alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
