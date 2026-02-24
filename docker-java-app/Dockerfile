@@ -11,7 +11,7 @@ FROM maven:3.9-eclipse-temurin-21 AS builder
 
 WORKDIR /build
 
-# Copy POM first (Docker layer caching for dependencies)
+## Copy POM first (Docker layer caching for dependencies)
 COPY pom.xml .
 
 ## Download all dependencies offline — cached unless pom.xml changes
