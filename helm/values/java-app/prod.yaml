@@ -1,14 +1,16 @@
+# ===========================================================================
 # Java App — Production environment values
-# Deployed to "production" namespace via ArgoCD (main branch)
+# Deployed to "prod" namespace via ArgoCD (main branch, tag trigger)
+# ===========================================================================
 
 fullnameOverride: java-app
 
 image:
   repository: 172483345533.dkr.ecr.eu-central-1.amazonaws.com/java-app
-  tag: "<production-tag>"
-  pullPolicy: Always
+  tag: "v1.0.2"
+  pullPolicy: IfNotPresent
 
-replicaCount: 3
+replicaCount: 2
 
 service:
   type: ClusterIP
@@ -24,6 +26,9 @@ ingress:
     alb.ingress.kubernetes.io/healthcheck-path: /health
     alb.ingress.kubernetes.io/group.name: production
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:... # TODO: for prod  Add ACM cert for HTTPS
+    # alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    # alb.ingress.kubernetes.io/ssl-redirect: "443"
   hosts:
     - paths:
         - path: /java
@@ -34,9 +39,10 @@ resources:
     cpu: 500m
     memory: 512Mi
   limits:
-    cpu: 1000m
-    memory: 1024Mi
+    cpu: "1"
+    memory: 1Gi
 
+# Java apps need more startup time (JVM warmup)
 livenessProbe:
   httpGet:
     path: /health
@@ -57,9 +63,9 @@ readinessProbe:
 
 autoscaling:
   enabled: true
-  minReplicas: 3
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 75
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 70
 
 env:
   - name: APP_NAME

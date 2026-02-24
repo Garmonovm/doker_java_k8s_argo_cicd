@@ -7,7 +7,7 @@ fullnameOverride: php-app
 
 image:
   repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/php-app
-  tag: "v1.0.0"   # tag should be updated by CD pipeline on release tag,when updated automatically by CI.
+  tag: "v1.0.2"
   pullPolicy: IfNotPresent
 
 replicaCount: 2
