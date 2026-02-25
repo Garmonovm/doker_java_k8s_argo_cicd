@@ -1,0 +1,27 @@
+global:
+  domain: ""
+
+configs:
+  params:
+    server.insecure: "true"
+
+server:
+  extraArgs:
+    - --insecure
+    - --basehref=/argocd
+    - --rootpath=/argocd
+
+  ingress:
+    enabled: true
+    ingressClassName: alb
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/group.name: ingress-shared-alb
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+      alb.ingress.kubernetes.io/backend-protocol: HTTP
+    path: /argocd
+    pathType: Prefix
+
+  service:
+    type: ClusterIP

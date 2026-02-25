@@ -1,0 +1,27 @@
+# ArgoCD Project grouping and isolation
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: allflex-apps
+  namespace: argocd
+spec:
+  description: "allflex microservices java and php"
+
+  sourceRepos:
+    - "https://github.com/Garmonovm/doker_java_k8s_argo_cicd"
+  # Allowed destination namespaces
+  destinations:
+    - namespace: argocd
+      server: https://kubernetes.default.svc
+    - namespace: development
+      server: https://kubernetes.default.svc
+    - namespace: production
+      server: https://kubernetes.default.svc
+
+  clusterResourceWhitelist: # allowed cluster scope actions
+    - group: ""
+      kind: Namespace
+
+  namespaceResourceWhitelist: # Allowed all namespace-scoped resources
+    - group: "*"
+      kind: "*"

@@ -1,0 +1,115 @@
+# CI Pipeline - Pull Request Checks
+# On PR to develop - Detect changes - Lint - Build & Scan
+
+name: CI — PR Checks
+
+on:
+  pull_request:
+    branches: [develop]
+    paths-ignore:
+      - "terraform/**"
+      - "argocd/**"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+jobs:
+  # Detect which services have code changes
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.set-matrix.outputs.services }}
+      any_changed: ${{ steps.set-matrix.outputs.any_changed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            php-app:
+              - 'docker-php-app/**'
+            java-app:
+              - 'docker-java-app/**'
+
+      - name: Build dynamic matrix
+        id: set-matrix
+        run: |
+          services="[]"
+          if [[ "${{ steps.filter.outputs.php-app }}" == "true" ]]; then
+            services=$(echo "$services" | jq -c '. + [{"app":"php-app","context":"docker-php-app"}]')
+          fi
+          if [[ "${{ steps.filter.outputs.java-app }}" == "true" ]]; then
+            services=$(echo "$services" | jq -c '. + [{"app":"java-app","context":"docker-java-app"}]')
+          fi
+          echo "services=$services" >> "$GITHUB_OUTPUT"
+          if [[ "$services" != "[]" ]]; then
+            echo "any_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "any_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Lint Dockerfiles on PR
+  lint:
+    name: "Lint: ${{ matrix.service.app }}"
+    needs: changes
+    if: needs.changes.outputs.any_changed == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint Dockerfile with hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: ${{ matrix.service.context }}/Dockerfile
+          failure-threshold: warning
+
+  # Build and Scan on PR
+  build-and-scan:
+    name: "Build & Scan: ${{ matrix.service.app }}"
+    needs: [changes, lint]
+    if: needs.changes.outputs.any_changed == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ECR_AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.service.context }}
+          push: false
+          load: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:pr-${{ github.sha }}
+
+    #   - name: Scan image with Trivy
+    #     uses: aquasecurity/trivy-action@0.28.0
+    #     with:
+    #       image-ref: "${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:pr-${{ github.sha }}"
+    #       format: table
+    #       exit-code: 1
+    #       severity: CRITICAL,HIGH
+    #       timeout: 10m
