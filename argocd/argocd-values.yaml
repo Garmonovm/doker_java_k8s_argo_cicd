@@ -8,8 +8,8 @@ configs:
 server:
   extraArgs:
     - --insecure
-    - --basehref=/argocd    # 👈 tells UI where to load assets from
-    - --rootpath=/argocd    # 👈 tells server to serve from /argocd
+    - --basehref=/argocd
+    - --rootpath=/argocd
 
   ingress:
     enabled: true
