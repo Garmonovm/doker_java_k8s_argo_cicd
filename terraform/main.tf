@@ -108,7 +108,7 @@ module "eks_blueprints_addons" {
   enable_argocd = true
   argocd = {
     namespace     = "argocd"
-    chart_version = "7.8.3" # 👈 specify version here
+    chart_version = "7.8.3"
     values        = [templatefile("${path.module}/../argocd/argocd-values.yaml", {})]
   }
 }
@@ -184,19 +184,17 @@ resource "aws_ecr_lifecycle_policy" "this" {
 
 ##apply root app argocd
 
-# resource "kubernetes_manifest" "argocd_allflex_apps" {
-#   manifest = yamldecode(file("${path.module}/../argocd/projects/allflex-apps.yaml"))
-#   depends_on = [
-#     module.eks_blueprints_addons
-#   ]
-# }
+resource "kubernetes_manifest" "argocd_allflex_apps" {
+  manifest = yamldecode(file("${path.module}/../argocd/projects/allflex-apps.yaml"))
+  depends_on = [
+    module.eks_blueprints_addons
+  ]
+}
 
-# resource "kubernetes_manifest" "argocd_root_app" {
-#   manifest = yamldecode(file("${path.module}/../argocd/root-app.yaml"))
+resource "kubernetes_manifest" "argocd_root_app" {
+  manifest = yamldecode(file("${path.module}/../argocd/root-app.yaml"))
 
-#   depends_on = [
-#     kubernetes_manifest.argocd_allflex_apps
-#   ]
-# }
-
-
+  depends_on = [
+    kubernetes_manifest.argocd_allflex_apps
+  ]
+}
