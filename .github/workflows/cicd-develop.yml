@@ -1,0 +1,143 @@
+# CD Pipeline - Develop Branch
+# On merge to develop - Detect changes - Build & Push to ECR - Update Helm - #TODO Health checks
+
+name: CD — Deploy to Development
+
+on:
+  push:
+    branches: [develop]
+    paths-ignore:
+      - "terraform/**"
+      - "argocd/**"
+
+permissions:
+  id-token: write
+  contents: write
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+jobs:
+  #Detect which services have code changes
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.set-matrix.outputs.services }}
+      any_changed: ${{ steps.set-matrix.outputs.any_changed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            php-app:
+              - 'docker-php-app/**'
+            java-app:
+              - 'docker-java-app/**'
+
+      - name: Build dynamic matrix
+        id: set-matrix
+        run: |
+          services="[]"
+          if [[ "${{ steps.filter.outputs.php-app }}" == "true" ]]; then
+            services=$(echo "$services" | jq -c '. + [{"app":"php-app","context":"docker-php-app"}]')
+          fi
+          if [[ "${{ steps.filter.outputs.java-app }}" == "true" ]]; then
+            services=$(echo "$services" | jq -c '. + [{"app":"java-app","context":"docker-java-app"}]')
+          fi
+          echo "services=$services" >> "$GITHUB_OUTPUT"
+          if [[ "$services" != "[]" ]]; then
+            echo "any_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "any_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Build, Scan, and Push to ECR with SHA on merge to develop
+  build-develop:
+    name: "Build & Push: ${{ matrix.service.app }}"
+    needs: changes
+    if: needs.changes.outputs.any_changed == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ECR_AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Extract short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.service.context }}
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:sha-${{ env.SHORT_SHA }}
+
+      # - name: Scan image with Trivy
+      #   uses: aquasecurity/trivy-action@0.28.0
+      #   with:
+      #     image-ref: "${{ steps.ecr.outputs.registry }}/${{ matrix.service.app }}:sha-${{ env.SHORT_SHA }}"
+      #     format: table
+      #     exit-code: 0
+      #     severity: CRITICAL,HIGH
+      #     timeout: 10m
+
+  # Update Helm values on merge to develop
+  update-helm-develop:
+    name: Update Helm (Develop)
+    needs: [changes, build-develop]
+    if: needs.changes.outputs.any_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update development Helm values
+        run: |
+          IMAGE_TAG="sha-${GITHUB_SHA::7}"
+          SERVICES='${{ needs.changes.outputs.services }}'
+
+          echo "Updating image tags to: ${IMAGE_TAG}"
+
+          for row in $(echo "$SERVICES" | jq -r '.[] | @base64'); do
+            APP=$(echo "$row" | base64 --decode | jq -r '.app')
+            VALUES_FILE="helm/values/${APP}/development.yaml"
+            if [ -f "$VALUES_FILE" ]; then
+              echo "  → ${VALUES_FILE}"
+              # Update Docker image tag
+              sed -i "s|tag:.*|tag: \"${IMAGE_TAG}\"|" "${VALUES_FILE}"
+              # Update APP_VERSION environment variable for Java app
+              if [[ "${APP}" == "java-app" ]]; then
+                echo "    Updating APP_VERSION to ${IMAGE_TAG}"
+                sed -i "/- name: APP_VERSION/,/value:.*/{s|value:.*|value: \"${IMAGE_TAG}\"|;}" "${VALUES_FILE}"
+              fi
+            fi
+          done
+
+      - name: Commit and push Helm updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add helm/values/
+          git diff --staged --quiet && echo "No changes to commit" && exit 0
+          git commit -m "ci: update image tags to sha-${{ env.SHORT_SHA }} [skip ci]"
+          git push
+
+##! ADD HEALTH CHECKS once ready
